@@ -1,0 +1,67 @@
+name: Build Jawwal Pay APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download source
+        uses: actions/checkout@v4
+
+      - name: Unpack uploaded ZIP files
+        run: |
+          for z in ./*.zip; do
+            [ -e "$z" ] || continue
+            unzip -oq "$z"
+          done
+          [ -f package.json ] || { echo "::error::package.json not found in the repo root"; exit 1; }
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create Android project
+        run: npx cap add android
+
+      - name: Sync app files
+        run: npx cap sync android
+
+      - name: Apply app icon
+        run: |
+          if [ -d icon-res ]; then
+            cp -r icon-res/. android/app/src/main/res/
+            echo "App icon applied"
+          else
+            echo "::notice::icon-res not found - building with the default icon"
+          fi
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jawwal-Pay-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
